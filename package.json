@@ -10,8 +10,14 @@
     "type": "git",
     "url": "git+https://github.com/coderlibs/webpack-auto-deploy-plugin.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "webpack-auto-deploy-plugin",
+    "webpack",
+    "deploy-plugin",
+    "ssh",
+    "ssh-plugin"
+  ],
+  "author": "类维松",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/coderlibs/webpack-auto-deploy-plugin/issues"
