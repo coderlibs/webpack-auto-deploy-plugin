@@ -1,0 +1,20 @@
+{
+  "name": "webpack-auto-deploy-plugin",
+  "version": "1.0.0",
+  "description": "基于webpack开发的打包自动部署插件",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coderlibs/webpack-auto-deploy-plugin.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/coderlibs/webpack-auto-deploy-plugin/issues"
+  },
+  "homepage": "https://github.com/coderlibs/webpack-auto-deploy-plugin#readme"
+}
