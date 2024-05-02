@@ -31,7 +31,7 @@ module.exports = function (env, argv) {
                         username: 'root', // ssh用户名
                         password: '123456', // 服务器登录密码，密码和密钥二选一
                         remotePath: '/www/wwwroot/web' // 要上传的服务器文件目录
-                        privateKeyPath  // 服务器登录密钥，密码和密钥二选一
+                        privateKeyPath  // 服务器登录密钥，密码和密钥二选一,更推荐使用密钥的形式，更安全
                     },
                     outputPath: path.resolve(__dirname, './app'), // 非必填 dist目录路径，默认会取output.path
                     clearRemoteDir: false  // 非必填 默认在部署的时候先删除远程文件夹，false为不删除，将会进行文件替换
