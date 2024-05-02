@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/coderlibs/webpack-auto-deploy-plugin#readme",
   "dependencies": {
+    "archiver": "^7.0.1",
     "ssh2": "^1.15.0"
   }
 }

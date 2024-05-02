@@ -1,22 +1,59 @@
 const fs = require('fs');
 const path = require('path');
 const Client = require('ssh2').Client;
+const archiver = require('archiver');
 const conn = new Client();
 
 class sshUploadPlugin {
     constructor(options) {
         this.options = options;
+        this.fileName;
+        this.remotePath;
+        this.outputFirPath;
     }
 
     apply(compiler) {
-        compiler.hooks.done.tap('sshUploadPlugin', (stats) => {
-            const outputPath = stats.compilation.outputOptions.path;
+        compiler.hooks.done.tap('sshUploadPlugin', async (stats) => {
+            const outputPath = stats.compilation.outputOptions.path || this.options.outputPath;
+            this.fileName = path.basename(outputPath);
+            await this.buildZip(outputPath);
             this.connect(outputPath);
         });
     }
 
+    // 项目打成tar包
+    buildZip = async (outputPath) => {
+        await new Promise((resolve, reject) => {
+            console.log(`打包 ${outputPath} Tar.gz`)
+            const archive = archiver('tar', {
+                gzip: true,
+                gzipOptions: {
+                    level: 1
+                }
+            }).on('error', (e) => {
+                console.error(e)
+            })
+
+            const output = fs
+                .createWriteStream(`${outputPath}.tar.gz`)
+                .on('close', (e) => {
+                    if (e) {
+                        console.error(`打包tar.gz出错: ${e}`)
+                        reject(e)
+                        process.exit(1)
+                    } else {
+                        console.log(`${outputPath}.tar.gz打包成功`)
+                        resolve()
+                    }
+                })
+            archive.pipe(output)
+            archive.directory(outputPath, `${this.fileName}`)
+            archive.finalize()
+        })
+    }
+
     // 创建SSH连接
-    connect(outputPath){
+    connect(outputPath) {
         const privateKey = {}
         if (this.options.privateKeyPath) {
             privateKey = {
@@ -26,7 +63,30 @@ class sshUploadPlugin {
         // 监听ready事件
         conn.on('ready', () => {
             console.log('SSH连接成功');
-            this.listDir(outputPath)
+            this.remoteFirPath = `${this.options.config.remotePath}/${this.fileName}.tar.gz`
+            this.outputFirPath = `${outputPath}.tar.gz`
+            conn.sftp((err, sftp) => {
+                if (err) throw err;
+
+                const readStream = fs.createReadStream(this.outputFirPath);
+                readStream.on('error', err => {
+                    console.log('error');
+                });
+                const writeStream = sftp.createWriteStream(this.remoteFirPath);
+                writeStream.on('close', () => {
+                    console.log(this.remoteFirPath, '文件上传完成');
+                    // 判断是否要先删除远程文件夹，默认清除远程文件夹
+                    if (this.options.clearRemoteDir !== false) {
+                        this.clearRemoteDir()
+                    } else {
+                        this.tarRemoteFile();
+                    }
+                });
+                writeStream.on('error', err => {
+                    console.log('error');
+                });
+                readStream.pipe(writeStream);
+            });
         }).connect({
             timeout: this.options.config.timeout || 10000, // 10s 
             host: this.options.config.host,
@@ -46,64 +106,48 @@ class sshUploadPlugin {
         });
     }
 
-    // 遍历所有文件
-    listDir(outputPath) {
-        let dir = outputPath || this.options.outputPath
-        console.log('正在上传文件...');
-        fs.readdirSync(dir).forEach((filename) => {
-            const fullPath = path.join(dir, filename);
-            const stats = fs.statSync(fullPath);
-
-            if (stats.isDirectory()) {
-                this.listDir(fullPath);
-            } else {
-                this.uploadFile(fullPath)
-            }
+    // 清理远程目录
+    clearRemoteDir() {
+        const command = `rm -rf ${this.options.config.remotePath}/${this.fileName}`;
+        conn.exec(command, (err, stream) => {
+            if (err) throw err;
+            stream.on('close', (code, signal) => {
+                console.log(`Remote command exited with code ${code}.`);
+                this.tarRemoteFile()
+            }).on('data', (data) => {
+                console.log(`STDOUT: ${data}`);
+            }).stderr.on('data', (data) => {
+                console.log(`STDERR: ${data}`);
+            });
         });
     }
-    uploadFile(filePath) {
-        return new Promise((resolve, reject) => {
-            const remotePath = path.join(this.options.config.remotePath, path.relative(this.options.outputPath, filePath));
-            const parent = path.dirname(remotePath);
-            conn.sftp((err, sftp) => {
-                mapDir(parent)
-                function mapDir(parent,fn){
-                    sftp.stat(parent,(err, stats) => {
-                        if(err) {
-                          // 路径不存在
-                          const topParent = path.dirname(parent);
-                          mapDir(topParent,callback)
-                          async function callback(){
-                            sftp.mkdir(parent);
-                            if(fn){
-                                await fn()
-                            }
-                            const readStream = fs.createReadStream(filePath);
-                            readStream.on('error', err => reject(err));
-                    
-                            const writeStream = sftp.createWriteStream(remotePath);
-                            writeStream.on('finish', () => resolve());
-                            writeStream.on('error', err => reject(err));
-                            readStream.pipe(writeStream);
-                          }
-                        } else {  
-                            // 路径存在
-                            if (fn) {
-                                fn()
-                            }
-                            const readStream = fs.createReadStream(filePath);
-                            readStream.on('error', err => reject(err));
-                    
-                            const writeStream = sftp.createWriteStream(remotePath);
-                            writeStream.on('finish', () => resolve());
-                            writeStream.on('error', err => reject(err));
-                            readStream.pipe(writeStream);
-                        }
-                    });
-                }
-            })
-        })
-      }
+
+    // 解压缩项目
+    tarRemoteFile() {
+        const command = `tar -xzf ${this.remoteFirPath} -C ${this.options.config.remotePath} && rm -rf ${this.remoteFirPath}`;
+        conn.exec(command, (err, stream) => {
+            if (err) throw err;
+            stream.on('close', (code, signal) => {
+                console.log(`Remote command exited with code ${code}.`);
+                this.removeLocalFile()
+            }).on('data', (data) => {
+                console.log(`STDOUT: ${data}`);
+            }).stderr.on('data', (data) => {
+                console.log(`STDERR: ${data}`);
+            });
+        });
+    }
+    // 删除本地打包文件
+    removeLocalFile = () => {
+        const localPath = `${this.outputFirPath}`
+        console.log('删除本地压缩包...');
+        // 删除本地文件
+        fs.unlink(localPath, (err) => {
+            if (err) throw err;
+            console.log(`Local file ${localPath} deleted.`);
+            conn.end();
+        });
+    }
 }
 
 module.exports = sshUploadPlugin;
