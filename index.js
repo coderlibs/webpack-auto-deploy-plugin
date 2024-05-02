@@ -54,17 +54,13 @@ class sshUploadPlugin {
 
     // 创建SSH连接
     connect(outputPath) {
-        const privateKey = {}
-        if (this.options.privateKeyPath) {
-            privateKey = {
-                privateKey: fs.readFileSync(this.options.privateKeyPath)
-            }
-        }
+        const privateKeyPath = this.options.config.privateKeyPath;
+
         // 监听ready事件
         conn.on('ready', () => {
             console.log('SSH连接成功');
-            this.remoteFirPath = `${this.options.config.remotePath}/${this.fileName}.tar.gz`
-            this.outputFirPath = `${outputPath}.tar.gz`
+            this.remoteFirPath = `${this.options.config.remotePath}/${this.fileName}.tar.gz`;
+            this.outputFirPath = `${outputPath}.tar.gz`;
             conn.sftp((err, sftp) => {
                 if (err) throw err;
 
@@ -94,7 +90,7 @@ class sshUploadPlugin {
             username: this.options.config.username,
             password: this.options.config.password,
             remotePath: this.options.config.remotePath,
-            ...privateKey
+            privateKey: privateKeyPath?fs.readFileSync(privateKeyPath):null
         });
         // 监听error事件
         conn.on('error', (err) => {
